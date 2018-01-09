@@ -1,0 +1,594 @@
+####Redis4.0(集群)安装####
+
+
+**准备了三台机器作为集群,redis的集群至少需要3主3从**
+
+**192.168.52.128 端口:7101(服务端)、17101(集群端,服务端口号+10000)、主**
+
+**192.168.52.128 端口:7102(服务端)、17102(集群端,服务端口号+10000)、从**
+
+**192.168.52.129 端口:7103(服务端)、17103(集群端,服务端口号+10000)、主**
+
+**192.168.52.129 端口:7104(服务端)、17104(集群端,服务端口号+10000)、从**
+
+**192.168.52.130 端口:7105(服务端)、17105(集群端,服务端口号+10000)、主**
+
+**192.168.52.130 端口:7106(服务端)、17106(集群端,服务端口号+10000)、从**
+
+
+> **三台机器redis安装环境和目录**
+> 
+> 环境:Ceontos 7.4
+> 安装目录:/usr/local/redis
+> 用户:root
+> 
+> 安装gcc
+> yum install gcc tcl
+
+* 2.三台机器分别下载Redis
+
+	cd /usr/local/src<br/>
+	wget http://download.redis.io/releases/redis-4.0.1.tar.gz
+	
+* 3.三台机器分别创建/usr/local/redis目录
+	
+	创建目录<br/>
+	mkdir /usr/local/redis<br/>
+	解压<br/>
+	tar -xvf redis-4.0.1.tar.gz
+
+* 4.三台机器安装(使用PREFIX指定目录)
+
+	cd redis-4.0.1<br/>
+	make PREFIX=/usr/local/redis install<br/>
+	
+	在安装过程中出现了如下错误<br/>
+	[root@bogon redis-4.0.1]# make test
+	cd src && make test
+	make[1]: 进入目录“/usr/local/src/redis-4.0.1/src”
+	You need tcl 8.5 or newer in order to run the Redis test
+	make[1]: *** [test] 错误 1
+	make[1]: 离开目录“/usr/local/src/redis-4.0.1/src”
+	make: *** [test] 错误 2<br/>
+	
+	从报错日志中可以可以出tcl需要高于8.5的版本才行，知道问题所在，那就好解决了
+	下载<br/>
+	wget http://downloads.sourceforge.net/tcl/tcl8.6.1-src.tar.gz  <br/>
+	
+	解压<br/>
+	tar -xvf tcl8.6.1-src.tar.gz
+	
+	切换目录并且进行安装
+	cd tcl8.6.1
+	./unix/configure make && make install
+	
+	然后再进行安装
+	make PREFIX=/usr/local/redis install
+	
+	安装完成之后在/usr/local/redis目录下有一个bin目录，这是redis的脚本执行命令
+	redis-benchmark  redis-check-aof  redis-check-rdb  redis-cli  redis-sentinel  redis-server
+	
+
+* 5.三台机器分别拷贝Redis配置文件
+
+	#192.168.52.128服务器
+	mkdir -p /usr/local/redis/cluster/conf
+	mkdir -p /usr/local/redis/cluster/log
+	mkdir -p /usr/local/redis/cluster/data/7101
+	mkdir -p /usr/local/redis/cluster/data/7102
+	cp /usr/local/src/redis-4.0.1/redis.conf  /usr/local/redis/cluster/conf/nodes-7101.conf	
+	cp /usr/local/src/redis-4.0.1/redis.conf  /usr/local/redis/cluster/conf/nodes-7102.conf	
+	
+	#192.168.52.129服务器
+	mkdir -p /usr/local/redis/cluster/conf
+	mkdir -p /usr/local/redis/cluster/log
+	mkdir -p /usr/local/redis/cluster/data/7103
+	mkdir -p /usr/local/redis/cluster/data/7104
+	cp /usr/local/src/redis-4.0.1/redis.conf  /usr/local/redis/cluster/conf/nodes-7103.conf	
+	cp /usr/local/src/redis-4.0.1/redis.conf  /usr/local/redis/cluster/conf/nodes-7104.conf	
+	
+	#192.168.52.130服务器
+	mkdir -p /usr/local/redis/cluster/conf
+	mkdir -p /usr/local/redis/cluster/log
+	mkdir -p /usr/local/redis/cluster/data/7105
+	mkdir -p /usr/local/redis/cluster/data/7106
+	cp /usr/local/src/redis-4.0.1/redis.conf  /usr/local/redis/cluster/conf/nodes-7105.conf	
+	cp /usr/local/src/redis-4.0.1/redis.conf  /usr/local/redis/cluster/conf/nodes-7106.conf	
+	
+* 6.三台机器分别修改Redis配置文件	
+
+	#192.168.52.128服务器
+	vim /usr/local/redis/cluster/conf/nodes-7101.conf
+	#设置守护进程运行
+	daemonize yes
+	#后台运行指定pid
+	pidfile /var/run/redis_7101.pid
+	#数据库个数
+	databases 8
+	#端口
+	port 7101
+	#打开redis集群
+	cluster-enabled yes
+	#集群配置文件
+	cluster-config-file /usr/local/redis/cluster/conf/nodes-cluster-7101.conf
+	#节点互连超时时间(毫秒)
+	cluster-node-timeout 15000
+	#主节点需要最少的从节点数,如果达到就会自动迁移
+	cluster-migration-barrier 1
+	#redis cluste需要16384个slot都正常的时候才能对外提供服务。如果其中一个sloat异常那个整个cluster不可用，停止写操作。默认为yes。如果设置为no，可查询
+	cluster-require-full-coverage yes
+	#启用aof持久化
+	appendonly yes
+	#节点存放数据
+	dir /usr/local/redis/cluster/data/7101
+	#日志文件
+	logfile /usr/local/redis/cluster/log/7101.log
+	#绑定ip
+	bind 192.168.52.128
+	
+	vim /usr/local/redis/cluster/conf/nodes-7102.conf
+	#设置守护进程运行
+	daemonize yes
+	#后台运行指定pid
+	pidfile /var/run/redis_7102.pid
+	#数据库个数
+	databases 8
+	#端口
+	port 7102
+	#打开redis集群
+	cluster-enabled yes
+	#集群配置文件(自动创建)
+	cluster-config-file /usr/local/redis/cluster/conf/nodes-cluster-7102.conf
+	#节点互连超时时间(毫秒)
+	cluster-node-timeout 15000
+	#主节点需要最少的从节点数,如果达到就会自动迁移
+	cluster-migration-barrier 1
+	#redis cluste需要16384个slot都正常的时候才能对外提供服务。如果其中一个sloat异常那个整个cluster不可用，停止写操作。默认为yes。如果设置为no，可查询
+	cluster-require-full-coverage yes
+	#启用aof持久化
+	appendonly yes
+	#节点存放数据
+	dir /usr/local/redis/cluster/data/7102
+	#日志文件
+	logfile /usr/local/redis/cluster/log/7102.log
+	#绑定ip
+	bind 192.168.52.128
+	
+	#192.168.52.129服务器
+	vim /usr/local/redis/cluster/conf/nodes-7103.conf
+	#设置守护进程运行
+	daemonize yes
+	#后台运行指定pid
+	pidfile /var/run/redis_7103.pid
+	#数据库个数
+	databases 8
+	#端口
+	port 7103
+	#打开redis集群
+	cluster-enabled yes
+	#集群配置文件(自动创建)
+	cluster-config-file /usr/local/redis/cluster/conf/nodes-cluster-7103.conf
+	#节点互连超时时间(毫秒)
+	cluster-node-timeout 15000
+	#主节点需要最少的从节点数,如果达到就会自动迁移
+	cluster-migration-barrier 1
+	#redis cluste需要16384个slot都正常的时候才能对外提供服务。如果其中一个sloat异常那个整个cluster不可用，停止写操作。默认为yes。如果设置为no，可查询
+	cluster-require-full-coverage yes
+	#启用aof持久化
+	appendonly yes
+	#节点存放数据
+	dir /usr/local/redis/cluster/data/7103
+	#日志文件
+	logfile /usr/local/redis/cluster/log/7103.log
+	#绑定ip
+	bind 192.168.52.129
+	
+	vim /usr/local/redis/cluster/conf/nodes-7104.conf
+	#设置守护进程运行
+	daemonize yes
+	#后台运行指定pid
+	pidfile /var/run/redis_7104.pid
+	#数据库个数
+	databases 8
+	#端口
+	port 7104
+	#打开redis集群
+	cluster-enabled yes
+	#集群配置文件(自动创建)
+	cluster-config-file /usr/local/redis/cluster/conf/nodes-cluster-7104.conf
+	#节点互连超时时间(毫秒)
+	cluster-node-timeout 15000
+	#主节点需要最少的从节点数,如果达到就会自动迁移
+	cluster-migration-barrier 1
+	#redis cluste需要16384个slot都正常的时候才能对外提供服务。如果其中一个sloat异常那个整个cluster不可用，停止写操作。默认为yes。如果设置为no，可查询
+	cluster-require-full-coverage yes
+	#启用aof持久化
+	appendonly yes
+	#节点存放数据
+	dir /usr/local/redis/cluster/data/7104
+	#日志文件
+	logfile /usr/local/redis/cluster/log/7104.log
+	#绑定ip
+	bind 192.168.52.129
+	
+	
+	#192.168.52.130服务器
+	vim /usr/local/redis/cluster/conf/nodes-7105.conf
+	#设置守护进程运行
+	daemonize yes
+	#后台运行指定pid
+	pidfile /var/run/redis_7105.pid
+	#数据库个数
+	databases 8
+	#端口
+	port 7105
+	#打开redis集群
+	cluster-enabled yes
+	#集群配置文件(自动创建)
+	cluster-config-file /usr/local/redis/cluster/conf/nodes-cluster-7105.conf
+	#节点互连超时时间(毫秒)
+	cluster-node-timeout 15000
+	#主节点需要最少的从节点数,如果达到就会自动迁移
+	cluster-migration-barrier 1
+	#redis cluste需要16384个slot都正常的时候才能对外提供服务。如果其中一个sloat异常那个整个cluster不可用，停止写操作。默认为yes。如果设置为no，可查询
+	cluster-require-full-coverage yes
+	#启用aof持久化
+	appendonly yes
+	#节点存放数据
+	dir /usr/local/redis/cluster/data/7105
+	#日志文件
+	logfile /usr/local/redis/cluster/log/7105.log
+	#绑定ip
+	bind 192.168.52.130
+	
+	vim /usr/local/redis/cluster/conf/nodes-7106.conf
+	#设置守护进程运行
+	daemonize yes
+	#后台运行指定pid
+	pidfile /var/run/redis_7106.pid
+	#数据库个数
+	databases 8
+	#端口
+	port 7106
+	#打开redis集群
+	cluster-enabled yes
+	#集群配置文件(自动创建)
+	cluster-config-file /usr/local/redis/cluster/conf/nodes-cluster-7106.conf
+	#节点互连超时时间(毫秒)
+	cluster-node-timeout 15000
+	#主节点需要最少的从节点数,如果达到就会自动迁移
+	cluster-migration-barrier 1
+	#redis cluste需要16384个slot都正常的时候才能对外提供服务。如果其中一个sloat异常那个整个cluster不可用，停止写操作。默认为yes。如果设置为no，可查询
+	cluster-require-full-coverage yes
+	#启用aof持久化
+	appendonly yes
+	#节点存放数据
+	dir /usr/local/redis/cluster/data/7106
+	#日志文件
+	logfile /usr/local/redis/cluster/log/7106.log
+	#绑定ip
+	bind 192.168.52.130
+	
+* 6.三台机器分别启动Redis配置文件
+
+	#192.168.52.128服务器
+	/usr/local/bin/redis-server  /usr/local/redis/cluster/conf/nodes-7101.conf	
+	/usr/local/bin/redis-server  /usr/local/redis/cluster/conf/nodes-7102.conf	
+	
+	ps -ef | grep -i redis
+	root       4409      1  0 18:21 ?        00:00:01 /usr/local/bin/redis-server *:7101 [cluster]
+	root       4532      1  0 18:24 ?        00:00:00 /usr/local/bin/redis-server *:7102 [cluster]
+	
+	#192.168.52.129服务器
+	/usr/local/bin/redis-server  /usr/local/redis/cluster/conf/nodes-7103.conf	
+	/usr/local/bin/redis-server  /usr/local/redis/cluster/conf/nodes-7104.conf
+	
+	ps -ef | grep -i redis	
+	root       3505      1  0 18:31 ?        00:00:00 /usr/local/bin/redis-server *:7103 [cluster]
+	root       3512      1  0 18:31 ?        00:00:00 /usr/local/bin/redis-server *:7104 [cluster]
+	
+	#192.168.52.130服务器
+	/usr/local/bin/redis-server  /usr/local/redis/cluster/conf/nodes-7105.conf	
+	/usr/local/bin/redis-server  /usr/local/redis/cluster/conf/nodes-7106.conf	
+	
+	ps -ef | grep -i redis
+	root       3740      1  0 18:34 ?        00:00:00 /usr/local/bin/redis-server *:7105 [cluster]
+	root       3745      1  0 18:34 ?        00:00:00 /usr/local/bin/redis-server *:7106 [cluster]
+
+* 7.设置防火墙
+
+	#192.168.52.128服务器
+	查看已开启的端口
+	firewall-cmd --zone=public --list-ports
+	添加端口
+	firewall-cmd --zone=public --add-port=7101/tcp --permanent
+	firewall-cmd --zone=public --add-port=7102/tcp --permanent
+	firewall-cmd --zone=public --add-port=17101/tcp --permanent
+	firewall-cmd --zone=public --add-port=17102/tcp --permanent
+	
+	#重启防火墙
+	systemctl restart firewalld.service  
+	
+	
+	#192.168.52.129服务器
+	查看已开启的端口
+	firewall-cmd --zone=public --list-ports
+	添加端口
+	firewall-cmd --zone=public --add-port=7103/tcp --permanent
+	firewall-cmd --zone=public --add-port=7104/tcp --permanent
+	firewall-cmd --zone=public --add-port=17103/tcp --permanent
+	firewall-cmd --zone=public --add-port=17104/tcp --permanent
+	
+	#重启防火墙
+	systemctl restart firewalld.service  
+	
+	#192.168.52.130服务器
+	查看已开启的端口
+	firewall-cmd --zone=public --list-ports
+	添加端口
+	firewall-cmd --zone=public --add-port=7105/tcp --permanent
+	firewall-cmd --zone=public --add-port=7106/tcp --permanent
+	firewall-cmd --zone=public --add-port=17105/tcp --permanent
+	firewall-cmd --zone=public --add-port=17106/tcp --permanent
+	
+	#重启防火墙
+	systemctl restart firewalld.service  
+	
+* 8.创建集群
+
+	#安装 ruby 和 rubygems
+	yum install ruby rubygems
+	
+	#检查 ruby 版本
+	ruby 2.0.0p648 (2015-12-16) [x86_64-linux]
+	
+	#gem安装 redis ruby 接口
+	gem install redis
+	Fetching: redis-4.0.1.gem (100%)
+	ERROR:  Error installing redis:
+	redis requires Ruby version >= 2.2.2
+	
+	报错了，需要2.2.2版本以上的，重新安装一下
+	
+	1. 安装RVM
+	1)gpg2 --keyserver hkp://keys.gnupg.net --recv-keys D39DC0E3
+	2)curl -L get.rvm.io | bash -s stable 
+	3)source /usr/local/rvm/scripts/rvm
+	
+	4)查看rvm库中已知的ruby版本
+	rvm list known
+	
+	5)安装一个ruby版本
+	rvm install 2.3.3
+	
+	6)使用ruby版本
+	rvm use  2.3.3
+	
+	7)卸载一个已知版本
+	rvm remove 2.2.2
+	
+	8)查看版本
+	ruby  --version
+	
+	9)安装redis
+	gem install redis
+	
+	Fetching: redis-4.0.1.gem (100%)
+	Successfully installed redis-4.0.1
+	Parsing documentation for redis-4.0.1
+	Installing ri documentation for redis-4.0.1
+	Done installing documentation for redis after 2 seconds
+	1 gem installed
+	
+	#创建集群命令(只需要在一个节点上操作即可)
+	#拷贝创建命令
+	cp /usr/local/src/redis-4.0.1/src/redis-trib.rb /usr/local/redis/bin/redis-trib 
+	
+	cd /usr/local/redis/bin
+	#创建集群命令
+	redis-trib create --replicas 1 192.168.52.128:7101 192.168.52.128:7102 192.168.52.129:7103 192.168.52.129:7104 192.168.52.130:7105 192.168.52.130:7106
+	
+	创建失败了遇到了以下错误
+	[ERR] Node 192.168.52.128:7101 is not empty. Either the node already knows other nodes (check with CLUSTER NODES) or contains some key in database 0.
+	或
+	/usr/local/rvm/gems/ruby-2.3.3/gems/redis-4.0.1/lib/redis/client.rb:119:in `call': ERR Slot 0 is already busy (Redis::CommandError)
+	
+	解决方式
+	登录三台主机的reids分别作如下操作
+	./redis-cli -h 192.168.52.128 -p 7101
+	
+	FLUSHALL
+	CLUSTER RESET soft
+	exit	
+	
+	重新操作
+	redis-trib create --replicas 1 192.168.52.128:7101 192.168.52.128:7102 192.168.52.129:7103 192.168.52.129:7104 192.168.52.130:7105 192.168.52.130:7106
+	
+	创建成功
+	>>> Creating cluster
+	>>> Performing hash slots allocation on 6 nodes...
+	Using 3 masters:
+	192.168.52.128:7101
+	192.168.52.129:7103
+	192.168.52.130:7105
+	Adding replica 192.168.52.129:7104 to 192.168.52.128:7101
+	Adding replica 192.168.52.128:7102 to 192.168.52.129:7103
+	Adding replica 192.168.52.130:7106 to 192.168.52.130:7105
+	M: 96f83a273ff118fbd7a6c73e95a06673bc8439a6 192.168.52.128:7101
+	   slots:0-5460 (5461 slots) master
+	S: 34af786e40d075aded4da393ef532565f0a13e14 192.168.52.128:7102
+	   replicates 21d325ea4bb47fcc33fc393c837a406d98c96d4f
+	M: 21d325ea4bb47fcc33fc393c837a406d98c96d4f 192.168.52.129:7103
+	   slots:5461-10922 (5462 slots) master
+	S: c42de3e3c67e9d4d8d151569cfbe6cbbad3a5570 192.168.52.129:7104
+	   replicates 96f83a273ff118fbd7a6c73e95a06673bc8439a6
+	M: e6352db16ec9fea3b5fb56e840f07f5ab541611b 192.168.52.130:7105
+	   slots:10923-16383 (5461 slots) master
+	S: ae22ca569199f83642583cff9a6f2bc6cf22d1bb 192.168.52.130:7106
+	   replicates e6352db16ec9fea3b5fb56e840f07f5ab541611b
+	Can I set the above configuration? (type 'yes' to accept): yes
+	>>> Nodes configuration updated
+	>>> Assign a different config epoch to each node
+	>>> Sending CLUSTER MEET messages to join the cluster
+	Waiting for the cluster to join........
+	>>> Performing Cluster Check (using node 192.168.52.128:7101)
+	M: 96f83a273ff118fbd7a6c73e95a06673bc8439a6 192.168.52.128:7101
+	   slots:0-5460 (5461 slots) master
+	   1 additional replica(s)
+	M: 21d325ea4bb47fcc33fc393c837a406d98c96d4f 192.168.52.129:7103
+	   slots:5461-10922 (5462 slots) master
+	   1 additional replica(s)
+	S: 34af786e40d075aded4da393ef532565f0a13e14 192.168.52.128:7102
+	   slots: (0 slots) slave
+	   replicates 21d325ea4bb47fcc33fc393c837a406d98c96d4f
+	S: c42de3e3c67e9d4d8d151569cfbe6cbbad3a5570 192.168.52.129:7104
+	   slots: (0 slots) slave
+	   replicates 96f83a273ff118fbd7a6c73e95a06673bc8439a6
+	S: ae22ca569199f83642583cff9a6f2bc6cf22d1bb 192.168.52.130:7106
+	   slots: (0 slots) slave
+	   replicates e6352db16ec9fea3b5fb56e840f07f5ab541611b
+	M: e6352db16ec9fea3b5fb56e840f07f5ab541611b 192.168.52.130:7105
+	   slots:10923-16383 (5461 slots) master
+	   1 additional replica(s)
+	[OK] All nodes agree about slots configuration.
+	>>> Check for open slots...
+	>>> Check slots coverage...
+	[OK] All 16384 slots covered.
+	
+	安装成功之后提示集群中16384个slot至少一个主节点运行处理，集群正常启动
+	
+	分配了三个主节点，剩下的三个为从节点。(主从节点是自动分配的)
+	Using 3 masters:
+	192.168.52.128:7101
+	192.168.52.129:7103
+	192.168.52.130:7105
+	
+	
+	说明
+	0).查看帮助
+	redis-trib help 
+	1).创建集群
+	redis-trib create (host1:port1 ... hostN:portN )
+	2).表示有每个主节点下有一个从节点
+	--replicas 1 
+
+* 9.集群简单测试
+
+	#./redis-cli -h 192.168.52.128 -c -p 7101
+	192.168.52.128:7101> set xzg "cluster-test"
+	OK
+	
+	#./redis-cli -h 192.168.52.129 -c -p 7104
+	192.168.52.129:7104> get xzg
+	-> Redirected to slot [2682] located at 192.168.52.128:7101
+	"cluster-test"
+		
+	[root@test-zk-node3 bin]# ./redis-cli -h 192.168.52.130 -c -p 7106
+	192.168.52.130:7106> get xzg
+	-> Redirected to slot [2682] located at 192.168.52.128:7101
+	"cluster-test"
+	
+	
+	#查看节点
+	./redis-cli -h 192.168.52.128 -c -p 7101 cluster nodes
+	
+	root@test-zk-node1 bin]# ./redis-cli -h 192.168.52.128 -c -p 7101 cluster nodes
+	21d325ea4bb47fcc33fc393c837a406d98c96d4f 192.168.52.129:7103@17103 master - 0 1514968732746 3 connected 5461-10922
+	34af786e40d075aded4da393ef532565f0a13e14 192.168.52.128:7102@17102 slave 21d325ea4bb47fcc33fc393c837a406d98c96d4f 0 1514968731000 3 connected
+	c42de3e3c67e9d4d8d151569cfbe6cbbad3a5570 192.168.52.129:7104@17104 slave 96f83a273ff118fbd7a6c73e95a06673bc8439a6 0 1514968731735 4 connected
+	ae22ca569199f83642583cff9a6f2bc6cf22d1bb 192.168.52.130:7106@17106 slave e6352db16ec9fea3b5fb56e840f07f5ab541611b 0 1514968730000 6 connected
+	e6352db16ec9fea3b5fb56e840f07f5ab541611b 192.168.52.130:7105@17105 master - 0 1514968730726 5 connected 10923-16383
+	96f83a273ff118fbd7a6c73e95a06673bc8439a6 192.168.52.128:7101@17101 myself,master - 0 1514968727000 1 connected 0-5460
+
+	
+* 10.三台机器分别配置服务(redis-(端口号),如redis-7101)
+
+	通过以上步骤,Redis的启动脚本为/usr/local/src/redis-4.0.1/utils/redis_init_script
+	将启动脚本拷贝到/etc/rc.d/init.d/目录下，命名为redis-7101
+	cp /usr/local/src/redis-4.0.1/utils/redis_init_script /etc/rc.d/init.d/redis-7101
+	
+	编辑redis做相应的修改，并注册成为服务
+	vim /etc/rc.d/init.d/redis-7101
+	
+	主要修改以下几处
+	REDISPORT=6379
+	EXEC=/usr/local/bin/redis-server
+	CLIEXEC=/usr/local/bin/redis-cli
+	PIDFILE=/var/run/redis_${REDISPORT}.pid
+	CONF="/etc/redis/${REDISPORT}.conf"
+	
+	start)
+        if [ -f $PIDFILE ]
+        then
+                echo "$PIDFILE exists, process is already running or crashed"
+        else
+                echo "Starting Redis server..."
+                $EXEC $CONF
+        fi
+        ;;
+	
+	
+	开始修改
+	#1.在脚本的第一行添加如下代码
+	#chkconfig: 2345 80 90
+	(这是注册服务的，如果不添加就不会提示:service redis does not support chkconfig)
+	
+	#2.REDISPORT端口号不变(这个端口会与配置文件的名称有关)
+	
+	#3.修改可执行文件和cliexec
+	EXEC=/usr/local/bin/redis-server 为 EXEC=/usr/local/redis/bin/redis-server
+	CLIEXEC=/usr/local/bin/redis-cli 为CLIEXEC=/usr/local/redis/bin/redis-cli
+	
+	#4.修改Redis配置文件
+	CONF="/usr/local/redis/cluster/conf/nodes-${REDISPORT}.conf"
+	
+	#5.更改redis的启动命令，以后台运行
+	 $EXEC $CONF &
+	 
+	=============================	 
+	最终修改后的代码为
+	REDISPORT=6379
+	EXEC=/usr/local/redis/bin/redis-server
+	CLIEXEC=/usr/local/redis/bin/redis-cli
+	PIDFILE=/var/run/redis_${REDISPORT}.pid
+	CONF="/usr/local/redis/cluster/conf/nodes-${REDISPORT}.conf"
+	IP=192.168.52.128(对应机器的IP)
+	
+	start)
+        if [ -f $PIDFILE ]
+        then
+                echo "$PIDFILE exists, process is already running or crashed"
+        else
+                echo "Starting Redis server..."
+                $EXEC $CONF &
+        fi
+        ;;
+      stop)
+        if [ ! -f $PIDFILE ]
+        then
+                echo "$PIDFILE does not exist, process is not running"
+        else
+                PID=$(cat $PIDFILE)
+                echo "Stopping ..."
+                $CLIEXEC -h $IP -p $REDISPORT shutdown
+                while [ -x /proc/${PID} ]
+                do
+                    echo "Waiting for Redis to shutdown ..."
+                    sleep 1
+                done
+                echo "Redis stopped"
+        fi
+        ;;
+	=============================	  
+	
+* 11.三台机器分别配注册服务(redis-(端口号),如redis-7101)
+
+	chkconfig --add redis-7101
+	
+* 12.三台机器启动服务(redis-(端口号),如redis-7101)
+	
+	service  redis-7101 start
+	
+* 13.三台机器停止服务(redis-(端口号),如redis-7101)
+
+	service redis-7101 stop
